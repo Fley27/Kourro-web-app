@@ -13,9 +13,10 @@ import { useAuthStore } from "../lib/authStore";
 import { useResponsive } from "../lib/responsive";
 import { salesEvents } from "../lib/salesEvents";
 import { buildReceipts, type ReceiptData } from "../lib/receipts";
-import { Button, Card, Overlay, ModalHeader, TextInput, toast } from "../components/ui";
+import { Button, Card, EmptyState, Field, Overlay, ModalHeader, TextInput, toast } from "../components/ui";
 import { Icon } from "../components/Icon";
 import { ReceiptModal } from "../components/ReceiptModal";
+import { CustomerModal } from "../components/CustomerModal";
 
 const STORE_ID = "demo-store-id";
 const DEVICE_ID = "web-pos";
@@ -62,6 +63,7 @@ type Customer = {
   store_id?: string;
   name: string;
   phone?: string | null;
+  email?: string | null;
   address?: string | null;
   id_card_number?: string | null;
   total_debt?: number;
@@ -152,13 +154,186 @@ export function POSPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [customerSearch, setCustomerSearch] = useState("");
-  const [showAddCustomer, setShowAddCustomer] = useState(false);
-  const [newCust, setNewCust] = useState({ name: "", idCard: "", phone: "", limit: "" });
+  const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [creditDueOption, setCreditDueOption] = useState("30");
   const [creditDueDate, setCreditDueDate] = useState(() => { const d = new Date(); d.setDate(d.getDate() + 30); return d.toISOString().slice(0, 10); });
   const [creditDueCustom, setCreditDueCustom] = useState("");
 
   const [lastReceipts, setLastReceipts] = useState<{ customer: ReceiptData; store: ReceiptData } | null>(null);
+
+  // Pause sale / tabs (Vant an Atann) — mirrors mobile POSScreen.
+  type SuspendedTab = {
+    id: string; store_id?: string; label: string; customer_id?: string | null;
+    cashier_id?: string | null; cashier_name?: string | null; status?: string;
+    total?: number; completed_sale_id?: string | null; created_at?: string;
+  };
+  const [tabs, setTabs] = useState<SuspendedTab[]>([]);
+  const [showTabs, setShowTabs] = useState(false);
+  const [showSuspend, setShowSuspend] = useState(false);
+  const [suspendLabel, setSuspendLabel] = useState("");
+  const [resumedTabId, setResumedTabId] = useState<string | null>(null);
+  const [resumedTabLabel, setResumedTabLabel] = useState("");
+
+  async function loadTabs() {
+    try {
+      const db = await getDb();
+      const rows = ((await db.getAllAsync("SELECT * FROM suspended_sales WHERE status = ?", ["open"]).catch(() => [])) ?? []) as SuspendedTab[];
+      setTabs(rows.sort((a, b) => String(b.created_at ?? "").localeCompare(String(a.created_at ?? ""))));
+    } catch { setTabs([]); }
+  }
+  useEffect(() => { loadTabs(); }, []);
+
+  async function logTabEvent(db: any, tabId: string, action: string, note?: string) {
+    try {
+      await db.runAsync(
+        "INSERT INTO suspended_sale_events (id,suspended_sale_id,actor_id,actor_name,action,note,created_at) VALUES (?,?,?,?,?,?,?)",
+        [`tev-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, tabId, myId, myName, action, note ?? null, new Date().toISOString()]
+      );
+    } catch {}
+  }
+
+  function openSuspend() {
+    if (!cart.length && !pending) { toast("Panyen vid", "Ajoute pwodwi anvan ou mete vant lan an atann.", "warn"); return; }
+    setSuspendLabel("");
+    setShowSuspend(true);
+  }
+
+  async function confirmSuspend() {
+    let lines = cart;
+    if (pending) {
+      const s = { unitId: pending.sel.unitId, unitName: pending.sel.unitName, factor: pending.sel.factor, variant: pending.sel.variant };
+      lines = mergeLine(cart, pending.product, s, Math.max(1, pending.qty));
+      setCart(lines);
+      setPending(null); setPendingInput("");
+    }
+    if (!lines.length) { toast("Panyen vid", "Ajoute pwodwi anvan ou kite l ouvè.", "warn"); return; }
+    const label = suspendLabel.trim() || `Tab • ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+    try {
+      const db = await getDb();
+      const now = new Date().toISOString();
+      const total = round2(lines.reduce((s, it) => s + it.lineTotal, 0));
+      const id = `tab-${Date.now()}`;
+      await db.runAsync(
+        "INSERT INTO suspended_sales (id,store_id,label,customer_id,cashier_id,cashier_name,seller_role,status,total,completed_sale_id,device_id,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        [id, STORE_ID, label, selectedCustomer?.id ?? null, myId, myName, role, "open", total, null, DEVICE_ID, now, now]
+      );
+      for (let i = 0; i < lines.length; i++) {
+        const it = lines[i];
+        await db.runAsync(
+          "INSERT INTO suspended_sale_items (id,suspended_sale_id,store_id,product_id,product_name,unit_id,unit_name,factor,variant,quantity,base_price,unit_price,line_total,bundle_applied,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+          [`${id}_${i}`, id, STORE_ID, it.id, it.name, it.unitId || null, it.unitName, it.factor || 1, it.variant || null, it.qty, it.basePrice || it.unitPrice, it.unitPrice, it.lineTotal, it.bundleApplied ? 1 : 0, now]
+        );
+      }
+      await logTabEvent(db, id, "suspended", `${lines.length} atik • ${fmt(total)} HTG`);
+      setCart([]); setPending(null); setPendingInput("");
+      setResumedTabId(null); setResumedTabLabel("");
+      setShowSuspend(false); setSuspendLabel("");
+      await loadTabs();
+      toast("Vant an atann ✓", `${label} • ${fmt(total)} HTG sove. Pri yo jele.`, "success");
+    } catch (e: any) {
+      toast("Erè", e?.message ?? "Mete an atann echwe", "error");
+    }
+  }
+
+  async function resumeTab(t: SuspendedTab) {
+    if (cart.length || pending) {
+      if (!window.confirm(`Panyen an gen atik. Reprann "${t.label}" ap ranplase l. Kontinye?`)) return;
+    }
+    try {
+      const db = await getDb();
+      const rows = (((await db.getAllAsync("SELECT * FROM suspended_sale_items WHERE suspended_sale_id = ?", [t.id]).catch(() => [])) ?? []) as any[]);
+      if (!rows.length) { toast("Tab vid", "Tab sa a pa gen atik.", "warn"); return; }
+      const lines: CartItem[] = [];
+      for (const row of rows) {
+        const factor = toNum(row.factor) || 1;
+        const product = products.find(p => p.id === row.product_id);
+        const max = product ? maxQtyFor(product, { unitId: row.unit_id, unitName: row.unit_name, factor, variant: row.variant ?? "Regular" }) : 0;
+        let qty = Math.max(1, Math.floor(toNum(row.quantity) || 1));
+        if (max && qty > max) qty = max;
+        if (qty <= 0) continue;
+        const base = toNum(row.base_price);
+        const lp = row.unit_id
+          ? resolveLinePrice(pricing, row.unit_id, row.variant ?? "Regular", qty, base > 0 ? base : undefined)
+          : { unitPrice: base, lineTotal: round2(base * qty), bundleApplied: false };
+        lines.push({
+          key: `${row.product_id}|${row.unit_id ?? "none"}|${row.variant ?? "Regular"}-${lines.length}`,
+          id: row.product_id,
+          name: row.product_name ?? product?.name ?? "—",
+          unitId: row.unit_id ?? null,
+          unitName: row.unit_name ?? null,
+          variant: row.variant ?? "Regular",
+          factor,
+          qty,
+          unitPrice: lp.unitPrice,
+          lineTotal: lp.lineTotal,
+          bundleApplied: lp.bundleApplied,
+          basePrice: base > 0 ? base : lp.unitPrice,
+        });
+      }
+      if (!lines.length) { toast("Stòk ensifizan", "Pa gen ase stòk pou reprann tab sa a kounye a.", "warn"); return; }
+      setCart(lines);
+      setPending(null); setPendingInput("");
+      setResumedTabId(t.id); setResumedTabLabel(t.label);
+      await logTabEvent(db, t.id, "resumed", `${myName} reprann`);
+      setShowTabs(false);
+      toast("Tab reprann ✓", `${t.label} • pri yo rete jele.`, "success");
+    } catch (e: any) {
+      toast("Erè", e?.message ?? "Reprann tab echwe", "error");
+    }
+  }
+
+  async function updateResumedTab() {
+    if (!resumedTabId) return;
+    let lines = cart;
+    if (pending) {
+      const s = { unitId: pending.sel.unitId, unitName: pending.sel.unitName, factor: pending.sel.factor, variant: pending.sel.variant };
+      lines = mergeLine(cart, pending.product, s, Math.max(1, pending.qty));
+      setCart(lines);
+      setPending(null); setPendingInput("");
+    }
+    if (!lines.length) { toast("Panyen vid", "Ajoute pwodwi anvan ou mete ajou.", "warn"); return; }
+    try {
+      const db = await getDb();
+      const now = new Date().toISOString();
+      const total = round2(lines.reduce((s, it) => s + it.lineTotal, 0));
+      const stillOpen = (((await db.getAllAsync("SELECT * FROM suspended_sales WHERE id = ?", [resumedTabId]).catch(() => [])) ?? []) as any[]);
+      if (!stillOpen.length) {
+        setResumedTabId(null); setResumedTabLabel("");
+        toast("Tab pa egziste", "Tab sa a pa egziste ankò. Panyen an konsève.", "warn");
+        return;
+      }
+      await db.runAsync("DELETE FROM suspended_sale_items WHERE suspended_sale_id = ?", [resumedTabId]);
+      for (let i = 0; i < lines.length; i++) {
+        const it = lines[i];
+        await db.runAsync(
+          "INSERT INTO suspended_sale_items (id,suspended_sale_id,store_id,product_id,product_name,unit_id,unit_name,factor,variant,quantity,base_price,unit_price,line_total,bundle_applied,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+          [`${resumedTabId}_${i}`, resumedTabId, STORE_ID, it.id, it.name, it.unitId || null, it.unitName, it.factor || 1, it.variant || null, it.qty, it.basePrice || it.unitPrice, it.unitPrice, it.lineTotal, it.bundleApplied ? 1 : 0, now]
+        );
+      }
+      await db.runAsync("UPDATE suspended_sales SET total = ?, updated_at = ? WHERE id = ?", [total, now, resumedTabId]);
+      await logTabEvent(db, resumedTabId, "updated", `${lines.length} atik • ${fmt(total)} HTG`);
+      setCart([]); setPending(null); setPendingInput("");
+      setResumedTabId(null); setResumedTabLabel("");
+      await loadTabs();
+      toast("Tab mete ajou ✓", `Nouvo pwodwi yo ajoute nan tab la • ${fmt(total)} HTG. Tab la rete ouvè.`, "success");
+    } catch (e: any) {
+      toast("Erè", e?.message ?? "Mete ajou echwe", "error");
+    }
+  }
+
+  async function voidTab(t: SuspendedTab) {
+    if (!isManagerPlus) { toast("Pa gen dwa", "Se Manadjè ak pi wo ka anile yon tab.", "warn"); return; }
+    if (!window.confirm(`Anile tab "${t.label}" • ${fmt(toNum(t.total))} HTG?`)) return;
+    try {
+      const db = await getDb();
+      await db.runAsync("UPDATE suspended_sales SET status = ? WHERE id = ?", ["voided", t.id]);
+      await logTabEvent(db, t.id, "voided", `${myName} anile`);
+      if (resumedTabId === t.id) { setResumedTabId(null); setResumedTabLabel(""); }
+      await loadTabs();
+    } catch (e: any) {
+      toast("Erè", e?.message ?? "Anile tab echwe", "error");
+    }
+  }
 
   useEffect(() => {
     if (searchParams.get("credit") !== "1") return;
@@ -546,8 +721,8 @@ export function POSPage() {
             remainingToSell -= consume;
           }
           await db.runAsync(
-            "INSERT INTO sale_items (id,store_id,sale_id,product_id,product_name,unit_id,variant,quantity,unit_price,cost_price,line_total,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-            [itemId, STORE_ID, saleId, it.id, it.name, it.unitId || null, it.variant, it.qty, round2(it.unitPrice), round2(consumedCost), it.lineTotal, now]
+            "INSERT INTO sale_items (id,store_id,sale_id,product_id,product_name,unit_id,variant,quantity,unit_price,cost_price,line_total,quantity_delivered,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            [itemId, STORE_ID, saleId, it.id, it.name, it.unitId || null, it.variant, it.qty, round2(it.unitPrice), round2(consumedCost), it.lineTotal, it.qty, now]
           );
           await db.runAsync(
             "UPDATE products SET stock_quantity = stock_quantity - ?, current_amount_available = current_amount_available - ? WHERE id = ?",
@@ -592,9 +767,9 @@ export function POSPage() {
           setSelectedCustomer(prev => prev && prev.id === cust.id ? { ...prev, total_debt: newTotalDebt, is_high_risk: creditBalance > 0 ? 1 : 0, open_debt_count: newOpen } : prev);
         }
 
-        let receiptCustomer: { name: string; idCard?: string | null; phone?: string | null } | null = null;
+        let receiptCustomer: { name: string; idCard?: string | null; phone?: string | null; email?: string | null } | null = null;
         if (selectedCustomer?.id) {
-          receiptCustomer = { name: selectedCustomer.name, idCard: selectedCustomer.id_card_number ?? null, phone: selectedCustomer.phone ?? null };
+          receiptCustomer = { name: selectedCustomer.name, idCard: selectedCustomer.id_card_number ?? null, phone: selectedCustomer.phone ?? null, email: selectedCustomer.email ?? null };
         } else if (payment === "mobile" && clientLegalName.trim()) {
           receiptCustomer = { name: clientLegalName.trim(), idCard: null, phone: clientPhone.trim() || null };
         }
@@ -606,6 +781,7 @@ export function POSPage() {
           createdAt: now,
           cashier: { id: myId, name: myName, role },
           customer: receiptCustomer,
+          customerId: selectedCustomer?.id ?? null,
           items: finalCart.map(it => ({
             name: it.name,
             variant: it.variant !== DEFAULT_VARIANT ? it.variant : null,
@@ -631,6 +807,14 @@ export function POSPage() {
         }
 
         try { salesEvents.emit(); } catch {}
+
+        if (resumedTabId) {
+          try {
+            await db.runAsync("UPDATE suspended_sales SET status = ?, completed_sale_id = ? WHERE id = ?", ["completed", saleId, resumedTabId]);
+          } catch {}
+          setResumedTabId(null); setResumedTabLabel("");
+          await loadTabs();
+        }
 
         setProducts(prev => prev.map(p => {
           const line = finalCart.filter(it => it.id === p.id);
@@ -707,36 +891,6 @@ export function POSPage() {
       })}
     </div>
   );
-
-  function doAddCustomer() {
-    if (!newCust.name.trim()) {
-      toast("Non obligatwa", "Bay non kliyan an", "warn");
-      return;
-    }
-    if (!isManagerPlus) {
-      toast("Pa gen dwa", "Se Manager ak pi wo ka ajoute kliyan", "warn");
-      return;
-    }
-    (async () => {
-      const db = await getDb();
-      try {
-        const id = `cust-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-        const lim = newCust.limit.trim() === "" ? null : toNum(newCust.limit);
-        await db.runAsync(
-          "INSERT INTO customers (id, store_id, name, phone, address, id_card_number, total_debt, credit_limit, credit_limit_source, is_high_risk, open_debt_count) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-          [id, STORE_ID, newCust.name.trim(), newCust.phone.trim() || null, null, newCust.idCard.trim() || null, 0, lim, lim === null ? null : "manual", 0, 0]
-        );
-        const fresh: Customer = { id, store_id: STORE_ID, name: newCust.name.trim(), phone: newCust.phone.trim() || null, id_card_number: newCust.idCard.trim() || null, total_debt: 0, credit_limit: lim, credit_limit_source: lim === null ? null : "manual", is_high_risk: 0, open_debt_count: 0 };
-        setCustomers(prev => prev.some(c => c.id === id) ? prev : [...prev, fresh]);
-        setSelectedCustomer(fresh);
-        setCustomerSearch("");
-        setShowAddCustomer(false);
-        setNewCust({ name: "", idCard: "", phone: "", limit: "" });
-      } catch (e: any) {
-        toast("Erè", e?.message ?? "Ajoute kliyan echwe", "error");
-      }
-    })();
-  }
 
   const qtySelector = (
     selected: string,
@@ -920,21 +1074,10 @@ export function POSPage() {
             <div style={{ fontSize: 11, fontWeight: 800, color: palette.muted2, textTransform: "uppercase", letterSpacing: 0.4 }}>Kliyan</div>
             <Icon name="people" size={14} color={palette.muted2} />
             <div style={{ flex: 1 }} />
-            <button onClick={() => setShowAddCustomer(v => !v)} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", color: palette.blue, fontSize: 12, fontWeight: 700, display: "flex", alignItems: "center", gap: 4 }}>
+            <button onClick={() => setShowCustomerModal(true)} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", color: palette.blue, fontSize: 12, fontWeight: 700, display: "flex", alignItems: "center", gap: 4 }}>
               <Icon name="plus" size={13} /> Nouvo kliyan
             </button>
           </div>
-          {showAddCustomer ? (
-            <Card style={{ marginTop: 10, padding: 14 }}>
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                <TextInput value={newCust.name} onChange={v => setNewCust(s => ({ ...s, name: v }))} placeholder="Non konplè" />
-                <TextInput value={newCust.idCard} onChange={v => setNewCust(s => ({ ...s, idCard: v }))} placeholder="Nimewo kat idantite (NIF/CIN)" />
-                <TextInput value={newCust.phone} onChange={v => setNewCust(s => ({ ...s, phone: v }))} numeric placeholder="Telefòn" />
-                <TextInput value={newCust.limit} onChange={v => setNewCust(s => ({ ...s, limit: v }))} numeric placeholder="Limit kredi (HTG)" />
-                <Button label="Anrejistre kliyan" icon="checkmark" onClick={doAddCustomer} />
-              </div>
-            </Card>
-          ) : null}
           <div style={{ marginTop: 12 }}>
             <TextInput value={customerSearch} onChange={setCustomerSearch} placeholder="Chèche kliyan pa non, ID oswa telefòn..." />
           </div>
@@ -1144,12 +1287,26 @@ export function POSPage() {
         <span style={{ fontWeight: 800, fontSize: 14 }}>{ht.cart}</span>
         <span style={{ fontSize: 11, color: palette.muted2 }}>{cartCount} pcs • {cart.length} atik</span>
         <div style={{ flex: 1 }} />
+        <button
+          onClick={() => setShowTabs(true)}
+          title="Vant an atann"
+          style={{ background: tabs.length ? palette.accentGoldSoft : "none", border: `0.5px solid ${tabs.length ? palette.accentGold : "transparent"}`, borderRadius: radius.pill, cursor: "pointer", color: tabs.length ? palette.accentGold : palette.muted2, fontWeight: 800, fontSize: 11.5, display: "flex", alignItems: "center", gap: 4, padding: "5px 10px", fontFamily: "inherit" }}
+        >
+          <Icon name="clock" size={14} /> Tabs{tabs.length ? ` (${tabs.length})` : ""}
+        </button>
         {cart.length ? (
           <button onClick={clearCart} style={{ background: "none", border: "none", cursor: "pointer", color: palette.danger, fontWeight: 700, fontSize: 11.5, display: "flex", alignItems: "center", gap: 4, fontFamily: "inherit" }}>
             <Icon name="trash" size={14} /> Vide
           </button>
         ) : null}
       </div>
+      {resumedTabId ? (
+        <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 6, padding: "8px 12px", background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: radius.md, fontSize: 12, fontWeight: 700, color: "#92400E" }}>
+          <Icon name="layers" size={13} />
+          <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{resumedTabLabel}</span>
+          <button onClick={() => { setResumedTabId(null); setResumedTabLabel(""); }} style={{ background: "none", border: "none", cursor: "pointer", color: "#92400E", fontWeight: 800 }}>✕</button>
+        </div>
+      ) : null}
 
       <div style={{ marginTop: 10, borderTop: `0.5px solid ${palette.hairline}` }}>
         {cart.map(it => {
@@ -1255,6 +1412,7 @@ export function POSPage() {
             <span className="num" style={{ fontWeight: 900, fontSize: 16 }}>{fmt(total)} HTG</span>
           </div>
           <Button label={`Peye • ${fmt(total)} HTG`} icon="checkmark-circle" variant="success" size="lg" block style={{ marginTop: 12 }} onClick={openPay} />
+          <Button label={resumedTabId ? "Mete Ajou nan tab la" : "Kite l Ouvè ⏸"} variant="ghost" block style={{ marginTop: 8 }} onClick={() => { if (resumedTabId) updateResumedTab(); else openSuspend(); }} />
           <Button label="Nouvo Vant" variant="ghost" block style={{ marginTop: 8 }} onClick={() => { clearCart(); setSelectedCustomer(null); }} />
         </div>
       ) : null}
@@ -1299,8 +1457,17 @@ export function POSPage() {
             {productGrid}
             <div style={{ marginTop: 16 }}>{cartPanel}</div>
             {cart.length ? (
-              <div style={{ position: "fixed", left: 0, right: 0, bottom: 0, padding: "10px 14px calc(10px + env(safe-area-inset-bottom))", background: palette.surface, borderTop: `0.5px solid ${palette.hairline}`, boxShadow: shadow.elevated, zIndex: 950 }}>
-                <Button label={`Peye • ${fmt(total)} HTG`} icon="checkmark-circle" variant="success" size="lg" block onClick={openPay} />
+              <div style={{ position: "fixed", left: 0, right: 0, bottom: 0, padding: "10px 14px calc(10px + env(safe-area-inset-bottom))", background: palette.surface, borderTop: `0.5px solid ${palette.hairline}`, boxShadow: shadow.elevated, zIndex: 950, display: "flex", gap: 8 }}>
+                <button
+                  onClick={() => { if (resumedTabId) updateResumedTab(); else openSuspend(); }}
+                  title={resumedTabId ? "Mete Ajou nan tab la" : "Kite l Ouvè"}
+                  style={{ padding: "0 16px", borderRadius: radius.md, border: `0.5px solid ${palette.hairlineStrong}`, background: palette.surface, color: palette.ink, fontWeight: 800, fontSize: 16, cursor: "pointer" }}
+                >
+                  ⏸
+                </button>
+                <div style={{ flex: 1 }}>
+                  <Button label={`Peye • ${fmt(total)} HTG`} icon="checkmark-circle" variant="success" size="lg" block onClick={openPay} />
+                </div>
               </div>
             ) : null}
           </div>
@@ -1308,10 +1475,60 @@ export function POSPage() {
       </div>
 
       {showPay ? paySheet : null}
+      {showCustomerModal ? (
+        <CustomerModal
+          storeId={STORE_ID}
+          customers={customers}
+          canAdd={isManagerPlus}
+          onSelect={setSelectedCustomer}
+          onClose={() => setShowCustomerModal(false)}
+          onAdded={fresh => setCustomers(prev => prev.some(c => c.id === fresh.id) ? prev : [...prev, fresh as Customer])}
+        />
+      ) : null}
+      {showSuspend ? (
+        <Overlay onClose={() => setShowSuspend(false)} width={460}>
+          <ModalHeader title="Kite l Ouvè ⏸" onClose={() => setShowSuspend(false)} sub={`${cart.length} liy • pri yo ap jele`} />
+          <Field label="Non kliyan / Tab *" required>
+            <TextInput value={suspendLabel} onChange={setSuspendLabel} placeholder="Ex. Marie — tab 3" autoFocus />
+          </Field>
+          <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+            <Button label="Anile" variant="ghost" style={{ flex: 1 }} onClick={() => setShowSuspend(false)} />
+            <Button label="✓ Kite l Ouvè" style={{ flex: 2 }} onClick={confirmSuspend} />
+          </div>
+        </Overlay>
+      ) : null}
+      {showTabs ? (
+        <Overlay onClose={() => setShowTabs(false)} width={560}>
+          <ModalHeader title="Vant an Atann" onClose={() => setShowTabs(false)} sub={`${tabs.length} tab ouvè`} />
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: "55vh", overflowY: "auto" }}>
+            {!tabs.length ? (
+              <EmptyState icon="layers" title="Pa gen tab ouvè" body="Mete yon vant an atann ak Kite l Ouvè." />
+            ) : null}
+            {tabs.map(t => (
+              <div key={t.id} style={{ border: `0.5px solid ${palette.hairline}`, borderRadius: radius.md, padding: 12, background: palette.surface }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 800, fontSize: 13 }}>{t.label}</div>
+                    <div style={{ fontSize: 11, color: palette.muted2, marginTop: 2 }}>{t.cashier_name ?? "?"} • {fmt(toNum(t.total))} HTG</div>
+                  </div>
+                  <div className="num" style={{ fontWeight: 900, fontSize: 15 }}>{fmt(toNum(t.total))} HTG</div>
+                </div>
+                <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                  <Button label="▶ Reprann" size="sm" style={{ flex: 1 }} onClick={() => resumeTab(t)} />
+                  {isManagerPlus ? (
+                    <Button label="✕ Anile" size="sm" variant="danger" onClick={() => voidTab(t)} />
+                  ) : null}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Overlay>
+      ) : null}
       {lastReceipts ? (
         <ReceiptModal
           receipts={lastReceipts}
           onClose={() => setLastReceipts(null)}
+          staging={{ storeId: STORE_ID, cashierId: myId, customerId: selectedCustomer?.id ?? null }}
         />
       ) : null}
     </div>

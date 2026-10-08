@@ -9,6 +9,8 @@ import { buildReceipts, buildReceiptHtml, ReceiptData } from "../lib/receipts";
 import { findSaleDetail, describeChange, changeSalePaymentMethod, salePaymentLabel, SaleDetail, PaymentMethod } from "../lib/salesCorrection";
 import { Icon } from "../components/Icon";
 import { Button, Card, Confirm, EmptyState, Field, KpiMini, ModalHeader, Overlay, RowItem, SearchBar, SectionTitle, Segmented, Select, TextInput, toast } from "../components/ui";
+// STAGING-PICKUP: single gated import — delete this + the STAGING block below to remove.
+import { PickupRedeemEntry } from "../pickup-staging";
 
 type Line = { productId: string; name: string; qty: number; price: number };
 
@@ -274,8 +276,8 @@ export function SalesPage() {
           lineTotal: l.qty * l.price,
         });
         await db.runAsync(
-          "INSERT INTO sale_items (id,store_id,sale_id,product_id,product_name,unit_id,variant,quantity,unit_price,cost_price,line_total,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-          [`si-${Date.now()}-${l.productId}`, "demo-store-id", id, l.productId, l.name, null, null, l.qty, l.price, 0, l.qty * l.price, now]
+          "INSERT INTO sale_items (id,store_id,sale_id,product_id,product_name,unit_id,variant,quantity,unit_price,cost_price,line_total,quantity_delivered,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+          [`si-${Date.now()}-${l.productId}`, "demo-store-id", id, l.productId, l.name, null, null, l.qty, l.price, 0, l.qty * l.price, l.qty, now]
         );
         try { await db.runAsync("UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ?", [l.qty, l.productId]); } catch {}
       }
@@ -308,6 +310,7 @@ export function SalesPage() {
         createdAt: now,
         cashier: { id: user.id, name: cashierName, role: user.role ?? "cashier" },
         customer: payMethod === "credit" ? (customers.find(c => c.id === customerId) ?? null) : null,
+        customerId: payMethod === "credit" ? customerId : null,
         items: items.map(it => ({ name: it.name, variant: null, unitName: null, qty: it.qty, unitPrice: it.unitPrice, lineTotal: it.lineTotal })),
         subtotal,
         discount: 0,
@@ -440,6 +443,9 @@ export function SalesPage() {
           </div>
         )}
       </Card>
+
+      {/* STAGING-PICKUP: cashier redemption entry (flag-gated). Delete block to remove. */}
+      <PickupRedeemEntry storeId={storeId} cashierId={user?.id ?? null} storeName={storeName} cashierName={user?.name ?? null} />
 
       <Card style={{ padding: 14 }}>
         <SectionTitle icon="receipt" right={<span style={{ fontSize: 11, color: palette.muted3 }} className="num">{todaySales.length} vant</span>}>Vant Jodi A</SectionTitle>

@@ -49,27 +49,71 @@ export function resetDb() {
   db = null;
 }
 
-// --- seeds (mirrors mobile db/index.ts fallback) ---------------------------
-const mockProductsSeed = [
-  { id: "prod-1", store_id: "demo-store-id", sku: "RICE-25KG", name: "Rice 25kg", name_ht: "Diri 25kg", unit: "sack", cost_price: 2500, selling_price: 3200, stock_quantity: 40, current_amount_available: 40, low_stock_threshold: 5 },
-  { id: "prod-2", store_id: "demo-store-id", sku: "OIL-5L", name: "Cooking Oil 5L", name_ht: "Lwil 5L", unit: "pcs", cost_price: 800, selling_price: 1100, stock_quantity: 25, current_amount_available: 25, low_stock_threshold: 5 },
-  { id: "prod-3", store_id: "demo-store-id", sku: "PREST-330", name: "Prestige Beer", name_ht: "Prestige", unit: "pcs", cost_price: 75, selling_price: 100, stock_quantity: 3, current_amount_available: 3, low_stock_threshold: 20 },
-  { id: "prod-4", store_id: "demo-store-id", sku: "SOAP-001", name: "Laundry Soap", name_ht: "Savon", unit: "pcs", cost_price: 30, selling_price: 50, stock_quantity: 200, current_amount_available: 200, low_stock_threshold: 30 },
-  { id: "prod-5", store_id: "demo-store-id", sku: "FARIN-25KG", name: "Flour 25kg", name_ht: "Farin 25kg", unit: "sack", cost_price: 2200, selling_price: 2800, stock_quantity: 30, current_amount_available: 30, low_stock_threshold: 5 },
-  { id: "prod-6", store_id: "demo-store-id", sku: "SIK-10KG", name: "White Sugar 10kg", name_ht: "Sik Blan 10kg", unit: "sack", cost_price: 700, selling_price: 950, stock_quantity: 35, current_amount_available: 35, low_stock_threshold: 5 },
-  { id: "prod-7", store_id: "demo-store-id", sku: "PASTA-500", name: "Spaghetti 500g", name_ht: "Pasta 500g", unit: "pcs", cost_price: 45, selling_price: 75, stock_quantity: 80, current_amount_available: 80, low_stock_threshold: 15 },
-  { id: "prod-8", store_id: "demo-store-id", sku: "TOMAT-400", name: "Tomato Paste 400g", name_ht: "Tomat 400g", unit: "pcs", cost_price: 80, selling_price: 120, stock_quantity: 60, current_amount_available: 60, low_stock_threshold: 10 },
-  { id: "prod-9", store_id: "demo-store-id", sku: "SARDINE-120", name: "Sardine Tin 120g", name_ht: "Sardine 120g", unit: "pcs", cost_price: 55, selling_price: 85, stock_quantity: 100, current_amount_available: 100, low_stock_threshold: 20 },
-  { id: "prod-10", store_id: "demo-store-id", sku: "LET-400", name: "Milk Powder 400g", name_ht: "Lèt 400g", unit: "pcs", cost_price: 480, selling_price: 650, stock_quantity: 40, current_amount_available: 40, low_stock_threshold: 8 },
-  { id: "prod-11", store_id: "demo-store-id", sku: "KAFE-200", name: "Rea Coffee 200g", name_ht: "Kafe 200g", unit: "pcs", cost_price: 320, selling_price: 450, stock_quantity: 50, current_amount_available: 50, low_stock_threshold: 10 },
-  { id: "prod-12", store_id: "demo-store-id", sku: "BISK-30", name: "Sayo Biscuit", name_ht: "Biskè Sayo", unit: "pcs", cost_price: 15, selling_price: 25, stock_quantity: 150, current_amount_available: 150, low_stock_threshold: 30 },
-  { id: "prod-13", store_id: "demo-store-id", sku: "KOLA-500", name: "Couronne Cola 500ml", name_ht: "Kola 500ml", unit: "pcs", cost_price: 30, selling_price: 50, stock_quantity: 90, current_amount_available: 90, low_stock_threshold: 20 },
-  { id: "prod-14", store_id: "demo-store-id", sku: "DLO-19L", name: "Water 5gal", name_ht: "Dlo 5 gal", unit: "pcs", cost_price: 100, selling_price: 150, stock_quantity: 25, current_amount_available: 25, low_stock_threshold: 5 },
-  { id: "prod-15", store_id: "demo-store-id", sku: "SAVON-DET", name: "Detergent Powder 1kg", name_ht: "Savon Poud 1kg", unit: "pcs", cost_price: 85, selling_price: 120, stock_quantity: 45, current_amount_available: 45, low_stock_threshold: 10 },
-  { id: "prod-16", store_id: "demo-store-id", sku: "PAT-COLG", name: "Colgate Toothpaste", name_ht: "Pat Colgate", unit: "pcs", cost_price: 130, selling_price: 180, stock_quantity: 60, current_amount_available: 60, low_stock_threshold: 10 },
-  { id: "prod-17", store_id: "demo-store-id", sku: "MAYI-10KG", name: "Corn Meal 10kg", name_ht: "Mayi 10kg", unit: "sack", cost_price: 600, selling_price: 800, stock_quantity: 20, current_amount_available: 20, low_stock_threshold: 5 },
-  { id: "prod-18", store_id: "demo-store-id", sku: "SEL-5KG", name: "Salt 5kg", name_ht: "Sèl 5kg", unit: "sack", cost_price: 200, selling_price: 300, stock_quantity: 30, current_amount_available: 30, low_stock_threshold: 5 },
-];
+// --- seeds: dev mock catalog mirrors packages/mock-catalog -------------------
+// (mirrored at ../data/catalog.*.json by `npm run generate` — never hand-edit)
+import CATALOG_CATS from "../data/catalog.categories.json";
+import CATALOG_SUPS from "../data/catalog.suppliers.json";
+import CATALOG_PRODS from "../data/catalog.products.json";
+import CATALOG_COSTS from "../data/catalog.costs.json";
+
+const avgCost = (pid: string) => {
+  const rows = (CATALOG_COSTS as any[]).filter((c) => c.product_id === pid);
+  return rows.length ? Math.round(rows.reduce((s, c) => s + c.cost, 0) / rows.length) : 0;
+};
+
+const mockProductsSeed = (CATALOG_PRODS as any[]).map((p) => ({
+  id: p.id, store_id: "demo-store-id", sku: p.sku, barcode: p.barcode,
+  name: p.name, name_ht: p.name_ht, unit: p.units?.[0]?.label ?? "Unit",
+  cost_price: avgCost(p.id), selling_price: p.units?.[0]?.sell ?? 0,
+  stock_quantity: p.stock ?? 0, current_amount_available: p.stock ?? 0,
+  low_stock_threshold: p.low ?? 5,
+}));
+
+const mockCategoriesSeed = (CATALOG_CATS as any[]).map((c: any) => ({
+  id: c.id, store_id: "demo-store-id", name: c.name, icon: c.icon, color: c.color,
+  sort_order: c.sort_order ?? 0, created_at: new Date().toISOString(),
+}));
+
+const mockCategoryLinksSeed = (CATALOG_CATS as any[]).flatMap((c: any) =>
+  (c.parents ?? []).map((parent: string) => ({ id: `${c.id}__${parent}`, child_id: c.id, parent_id: parent }))
+);
+
+const mockProdCatsSeed = (CATALOG_PRODS as any[]).flatMap((p: any) =>
+  (p.categories ?? []).map((cid: string) => ({ product_id: p.id, category_id: cid }))
+);
+
+const mockUnitsSeed = (CATALOG_PRODS as any[]).flatMap((p: any) =>
+  (p.units ?? []).map((u: any) => ({
+    id: u.id, product_id: p.id, unit_name: u.label, condition: u.condition ?? null,
+    conversion_factor: u.factor ?? 1, created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+  }))
+);
+
+const variantFor = (condition: string | null) =>
+  condition ? condition.charAt(0).toUpperCase() + condition.slice(1) : "Regular";
+
+const mockPricesSeed = (CATALOG_PRODS as any[]).flatMap((p: any) =>
+  (p.units ?? []).map((u: any) => ({
+    id: `price-${u.id}`, unit_id: u.id, variant: variantFor(u.condition ?? null),
+    price: u.sell ?? 0, updated_at: new Date().toISOString(),
+  }))
+);
+
+const mockBundlesSeed = (CATALOG_PRODS as any[]).flatMap((p: any, pi: number) =>
+  (p.bundles ?? []).map((b: any, i: number) => ({
+    id: `bundle-${p.id}-${i}`, unit_id: b.unit_id, variant: b.variant,
+    min_quantity: b.minQty ?? 0, bundle_price: b.price ?? 0, created_at: new Date().toISOString(),
+  }))
+);
+
+const mockSuppliersSeed = (CATALOG_SUPS as any[]).map((s: any) => ({
+  ...s, store_id: "demo-store-id", created_at: new Date().toISOString(), updated_at: new Date().toISOString(), is_deleted: 0,
+}));
+
+const mockCostsSeed = (CATALOG_COSTS as any[]).map((c: any) => ({
+  id: `psc-${c.product_id}-${c.supplier_id}-${c.unit_id}`.slice(0, 120),
+  ...c, last_updated: new Date().toISOString(), updated_at: new Date().toISOString(), is_deleted: 0,
+}));
 
 const customersSeed = [
   { id: "cust-1", store_id: "demo-store-id", name: "Jean Baptiste", id_card_number: "004-123-4567", phone: "+509 3810 0001", address: "Delmas 33, Port-au-Prince", total_debt: 3500, credit_limit: 5000, credit_limit_source: "manual", is_high_risk: true, open_debt_count: 1 },
@@ -93,42 +137,42 @@ function seedIfEmpty() {
     ]);
   }
   if (!memStore.has("categories")) {
-    memStore.set("categories", [
-      { id: "food", store_id: "demo-store-id", name: "Manje", icon: "🍚", color: "#0f172a", sort_order: 1, created_at: new Date().toISOString() },
-      { id: "drinks", store_id: "demo-store-id", name: "Bwason", icon: "🥤", color: "#0f172a", sort_order: 2, created_at: new Date().toISOString() },
-      { id: "household", store_id: "demo-store-id", name: "Kay", icon: "🧴", color: "#0f172a", sort_order: 3, created_at: new Date().toISOString() },
-      { id: "dairy", store_id: "demo-store-id", name: "Letye", icon: "🥛", color: "#0f172a", sort_order: 4, created_at: new Date().toISOString() },
-      { id: "bakery", store_id: "demo-store-id", name: "Boulanjri", icon: "🥐", color: "#0f172a", sort_order: 5, created_at: new Date().toISOString() },
-      { id: "produce", store_id: "demo-store-id", name: "Lejume", icon: "🥬", color: "#0f172a", sort_order: 6, created_at: new Date().toISOString() },
-    ]);
+    memStore.set("categories", [...mockCategoriesSeed]);
   }
-  if (!memStore.has("product_categories")) memStore.set("product_categories", []);
+  if (!memStore.has("category_links")) memStore.set("category_links", [...mockCategoryLinksSeed]);
+  if (!memStore.has("suppliers")) memStore.set("suppliers", [...mockSuppliersSeed]);
+  if (!memStore.has("product_supplier_costs")) memStore.set("product_supplier_costs", [...mockCostsSeed]);
+  if (!memStore.has("product_categories")) memStore.set("product_categories", [...mockProdCatsSeed]);
   if (!memStore.has("suspended_sales")) memStore.set("suspended_sales", []);
   if (!memStore.has("suspended_sale_items")) memStore.set("suspended_sale_items", []);
   if (!memStore.has("suspended_sale_events")) memStore.set("suspended_sale_events", []);
   if (!memStore.has("product_units")) {
-    const nowm = new Date().toISOString();
-    const prods = memStore.get("products") ?? [];
-    memStore.set("product_units", prods.map((p: any) => ({ id: `unit-${p.id}-base`, product_id: p.id, unit_name: p.unit ?? "Unit", conversion_factor: 1, created_at: nowm, updated_at: nowm })));
+    memStore.set("product_units", [...mockUnitsSeed]);
   }
   if (!memStore.has("product_prices")) {
-    const nowm = new Date().toISOString();
-    const units = memStore.get("product_units") ?? [];
-    const prices = units.map((u: any) => {
-      const prod = (memStore.get("products") ?? []).find((p: any) => p.id === u.product_id);
-      return { id: `price-${u.product_id}-regular`, unit_id: u.id, variant: "Regular", price: Number(prod?.selling_price ?? 0), updated_at: nowm };
-    });
-    prices.push({ id: "price-prod-3-cold", unit_id: "unit-prod-3-base", variant: "Cold", price: 200, updated_at: nowm });
-    memStore.set("product_prices", prices);
+    memStore.set("product_prices", [...mockPricesSeed]);
   }
   if (!memStore.has("product_bundles")) {
-    memStore.set("product_bundles", [{ id: "bundle-prod-3-cold-3", unit_id: "unit-prod-3-base", variant: "Cold", min_quantity: 3, bundle_price: 500, created_at: new Date().toISOString() }]);
+    memStore.set("product_bundles", [...mockBundlesSeed]);
   }
   if (!memStore.has("stock_batches")) memStore.set("stock_batches", []);
   if (!memStore.has("stock_movements")) memStore.set("stock_movements", []);
   if (!memStore.has("_meta")) memStore.set("_meta", []);
   if (!memStore.has("receipts")) memStore.set("receipts", []);
   if (!memStore.has("report_reviews")) memStore.set("report_reviews", []);
+  // Staging: partial pickup history (dormant when flag OFF)
+  if (!memStore.has("sale_pickups")) memStore.set("sale_pickups", []);
+  if (!memStore.has("customer_notes")) memStore.set("customer_notes", []);
+  // Repair: rows with delivered=0 and no pickup history were fully taken together.
+  try {
+    const picks = memStore.get("sale_pickups") ?? [];
+    const withHist = new Set(picks.map((p: any) => p.sale_item_id));
+    for (const it of memStore.get("sale_items") ?? []) {
+      if (Number(it.quantity_delivered ?? 0) === 0 && !withHist.has(it.id) && Number(it.quantity ?? 0) > 0) {
+        it.quantity_delivered = it.quantity;
+      }
+    }
+  } catch {}
 
   if (!memStore.has("sales")) {
     memStore.set("sales", []);
@@ -172,6 +216,20 @@ export async function getDb(): Promise<any> {
   const loaded = loadStored();
   seedIfEmpty();
   if (!loaded) markDirty();
+  // Repair (every load, incl. persisted stores): delivered=0 + no pickup history
+  // means the sale went out fully together — not an open balance.
+  try {
+    const picks = memStore.get("sale_pickups") ?? [];
+    const withHist = new Set(picks.map((p: any) => p.sale_item_id));
+    let fixed = false;
+    for (const it of memStore.get("sale_items") ?? []) {
+      if (Number(it.quantity_delivered ?? 0) === 0 && !withHist.has(it.id) && Number(it.quantity ?? 0) > 0) {
+        it.quantity_delivered = it.quantity;
+        fixed = true;
+      }
+    }
+    if (fixed) markDirty();
+  } catch {}
 
   db = {
     execAsync: async () => {},
@@ -414,10 +472,35 @@ export async function getDb(): Promise<any> {
         captureChange("salary_deductions", "create", sd);
       } else if (sql.includes("INSERT INTO sale_items")) {
         const items = memStore.get("sale_items") ?? [];
-        const si = { id: params[0], store_id: params[1], sale_id: params[2], product_id: params[3], product_name: params[4], unit_id: params[5] ?? null, variant: params[6] ?? null, quantity: params[7], unit_price: params[8], cost_price: params[9], line_total: params[10], created_at: params[11] ?? new Date().toISOString() };
+        // Column-parsed (handles 12-col legacy + 13-col with quantity_delivered).
+        // No pickup action = all products delivered together: delivered defaults to quantity.
+        const colPart = (sql.match(/\(\s*id\s*,(.*?)\)\s*VALUES/i)?.[1] ?? "").split(",").map(s => s.trim());
+        const at = (name: string): any => {
+          const i = colPart.indexOf(name);
+          return i >= 0 ? params[i + 1] : undefined;
+        };
+        const qty = Number(at("quantity") ?? params[7] ?? 0);
+        const qd = at("quantity_delivered");
+        const si = { id: params[0], store_id: params[1], sale_id: params[2], product_id: params[3], product_name: params[4], unit_id: params[5] ?? null, variant: params[6] ?? null, quantity: qty, unit_price: at("unit_price") ?? params[8], cost_price: at("cost_price") ?? params[9], line_total: at("line_total") ?? params[10], quantity_delivered: qd ?? qty, created_at: at("created_at") ?? at("updated_at") ?? params[11] ?? new Date().toISOString() };
         items.push(si);
         memStore.set("sale_items", items);
         captureChange("sale_items", "create", si);
+      } else if (sql.includes("INTO sale_pickups")) {
+        // Staging only: append-only pickup history. Dormant when flag OFF.
+        const arr = memStore.get("sale_pickups") ?? [];
+        arr.push({ id: params[0], store_id: params[1], sale_id: params[2], sale_item_id: params[3], quantity: Number(params[4] ?? 0), picked_up_by: params[5] ?? null, created_at: params[6] ?? new Date().toISOString() });
+        memStore.set("sale_pickups", arr);
+      } else if (sql.includes("UPDATE sale_items SET")) {
+        // Staging only: quantity_delivered adjustments. Generic SET parser (dormant when OFF).
+        const items = memStore.get("sale_items") ?? [];
+        const id = params[params.length - 1];
+        const it = items.find((x: any) => x.id === id);
+        if (it) {
+          const setPart = (sql.match(/SET\s+(.*?)\s+WHERE/i)?.[1] ?? "").trim();
+          const cols = setPart.split(",").map(p => p.trim().replace(/\s*=\s*\??$/, "").trim());
+          cols.forEach((col, i) => { if (params[i] !== undefined) (it as any)[col] = params[i]; });
+          captureChange("sale_items", "update", it);
+        }
       } else if (sql.includes("INTO receipts")) {
         const arr = memStore.get("receipts") ?? [];
         const idx = arr.findIndex((x: any) => x.id === params[0]);
@@ -553,9 +636,9 @@ export async function getDb(): Promise<any> {
         if (!customers.some((c: any) => c.id === newId)) {
           let cust: any;
           if (params.length === 11) {
-            cust = { id: params[0], store_id: params[1], name: params[2], phone: params[3], address: params[4], id_card_number: params[5], total_debt: params[6], credit_limit: params[7], credit_limit_source: params[8], is_high_risk: params[9], open_debt_count: params[10] };
+            cust = { id: params[0], store_id: params[1], name: params[2], phone: params[3], address: params[4], id_card_number: params[5], total_debt: params[6], credit_limit: params[7], credit_limit_source: params[8], is_high_risk: params[9], open_debt_count: params[10], email: null };
           } else {
-            cust = { id: params[0], store_id: params[1], name: params[2], phone: params[3], id_card_number: params[4], total_debt: params[5], credit_limit: params[6], credit_limit_source: params[7], is_high_risk: params[8], open_debt_count: params[9], address: null };
+            cust = { id: params[0], store_id: params[1], name: params[2], phone: params[3], id_card_number: params[4], total_debt: params[5], credit_limit: params[6], credit_limit_source: params[7], is_high_risk: params[8], open_debt_count: params[9], address: null, email: null };
           }
           customers.push(cust);
           memStore.set("customers", customers);
@@ -893,9 +976,31 @@ export async function getDb(): Promise<any> {
         const gone = arr.find((x: any) => x.id === params[0]);
         memStore.set("product_units", arr.filter((x: any) => x.id !== params[0]));
         if (gone) captureChange("product_units", "delete", { ...gone, is_deleted: 1 });
+      } else if (sql.includes("INTO customer_notes")) {
+        const arr = memStore.get("customer_notes") ?? [];
+        arr.push({ id: params[0], store_id: params[1], customer_id: params[2], text: params[3], created_by: params[4] ?? null, created_at: params[5] ?? new Date().toISOString() });
+        memStore.set("customer_notes", arr);
       } else if (sql.includes("DELETE FROM suspended_sale_items")) {
         const arr = memStore.get("suspended_sale_items") ?? [];
         memStore.set("suspended_sale_items", arr.filter((x: any) => x.suspended_sale_id !== params[0]));
+      } else if (sql.includes("UPDATE receipts SET")) {
+        // Post-sale customer attach: patch stored receipt JSON content.
+        const arr = memStore.get("receipts") ?? [];
+        const id = params[params.length - 1];
+        const rec = arr.find((x: any) => x.id === id);
+        if (rec) {
+          const setPart = (sql.match(/SET\s+(.*?)\s+WHERE/i)?.[1] ?? "").trim();
+          const cols = setPart.split(",").map(p => p.trim().replace(/\s*=\s*\??$/, "").trim());
+          cols.forEach((col, i) => { if (params[i] !== undefined) (rec as any)[col] = params[i]; });
+        }
+      } else if (sql.includes("DELETE FROM receipts")) {
+        // "No receipt" choice: remove stored copies so no receipt exists at all.
+        const arr = memStore.get("receipts") ?? [];
+        if (sql.includes("WHERE sale_id")) {
+          memStore.set("receipts", arr.filter((x: any) => x.sale_id !== params[0]));
+        } else {
+          memStore.set("receipts", arr.filter((x: any) => x.id !== params[0]));
+        }
       }
       markDirty();
       return { lastInsertRowId: 0, changes: 1 };
@@ -923,6 +1028,26 @@ export async function getDb(): Promise<any> {
           return all.filter((x: any) => x.sale_id === saleId);
         }
         return all;
+      }
+      if (sql.includes("FROM sale_pickups")) {
+        const all = memStore.get("sale_pickups") ?? [];
+        if (sql.includes("WHERE sale_id")) {
+          const saleId = params?.[0];
+          return all.filter((x: any) => x.sale_id === saleId);
+        }
+        if (sql.includes("WHERE sale_item_id")) {
+          const iid = params?.[0];
+          return all.filter((x: any) => x.sale_item_id === iid);
+        }
+        return all;
+      }
+      if (sql.includes("FROM customer_notes")) {
+        const arr = memStore.get("customer_notes") ?? [];
+        if (sql.includes("WHERE customer_id")) {
+          const cid = params?.[0];
+          return arr.filter((x: any) => x.customer_id === cid);
+        }
+        return arr;
       }
       if (sql.includes("FROM receipts")) {
         const all = memStore.get("receipts") ?? [];

@@ -548,7 +548,7 @@ export function LoginPage() {
             color: "#fff6ee",
             fontSize: 15,
             fontWeight: 800,
-            fontFamily: "'DM Sans', 'Quicksand', system-ui, sans-serif",
+            fontFamily: "inherit",
             cursor: loading ? "not-allowed" : "pointer",
             opacity: loading ? 0.65 : 1,
             display: "flex",

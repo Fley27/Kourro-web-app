@@ -713,8 +713,8 @@ export function ShiftReportPage() {
           <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
             {[{ lbl: "Ouvèti", v: myOpening, add: true }, { lbl: "Vant Kach", v: myCashTotal, add: true }, { lbl: "Kolekte Dèt", v: myCollectedTotal, add: true }, { lbl: "Retrè", v: myWithdrawalsTotal, add: false }].map(row => (
               <div key={row.lbl} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontFamily: "Roboto, sans-serif", fontSize: 12, color: palette.muted }}>{row.lbl}</span>
-                <span style={{ fontFamily: "Quicksand, sans-serif", fontWeight: 700, fontSize: 13, color: row.add ? palette.inkSoft : palette.danger }} className="num">{row.add ? "+" : "−"}{fmt(row.v)} HTG</span>
+                <span style={{ fontSize: 12, color: palette.muted }}>{row.lbl}</span>
+                <span style={{ fontWeight: 700, fontSize: 13, color: row.add ? palette.inkSoft : palette.danger }} className="num">{row.add ? "+" : "−"}{fmt(row.v)} HTG</span>
               </div>
             ))}
             <div style={{ fontSize: 9, color: palette.muted2, marginTop: 6 }} className="num">{myOpening} ouvèti + {myCashTotal} vant kach + {myCollectedTotal} kolekte − {myWithdrawalsTotal} retrè = kach espere</div>

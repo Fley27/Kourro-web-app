@@ -25,10 +25,11 @@ export function fmtHTG(n: number | string | null | undefined, decimals = 0): str
   return `${fmt(n, decimals)} HTG`;
 }
 
-/** Monospace stack for price columns so digits/decimals line up. */
+/** Tabular Inter for price columns so digits/decimals line up. */
 export const monoStyle: React.CSSProperties = {
-  fontFamily: "Menlo, monospace",
-  fontVariant: "tabular-nums",
+  fontFamily: '"Inter", system-ui, -apple-system, "Segoe UI", sans-serif',
+  fontVariantNumeric: "tabular-nums",
+  fontFeatureSettings: '"tnum"',
 };
 
 export function shortTime(ms: number): string {

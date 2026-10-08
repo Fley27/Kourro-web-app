@@ -16,6 +16,7 @@ export interface ReceiptCustomer {
   name: string;
   idCard?: string | null;
   phone?: string | null;
+  email?: string | null;
 }
 
 export interface ReceiptData {
@@ -38,6 +39,7 @@ export interface ReceiptData {
   amountDue: number;
   change: number;
   dueDate: string | null;
+  customerId?: string | null;
   debtId?: string | null;
   debtTotal?: number | null;
   previousBalance?: number | null;
@@ -60,6 +62,7 @@ export function buildReceipts(input: {
   createdAt: string;
   cashier: { id: string | null; name: string; role: string };
   customer: ReceiptCustomer | null;
+  customerId?: string | null;
   items: ReceiptItem[];
   subtotal: number;
   discount?: number;
@@ -78,6 +81,7 @@ export function buildReceipts(input: {
     createdAt: input.createdAt,
     cashier: input.cashier,
     customer: input.customer,
+    customerId: input.customerId ?? null,
     items: input.items,
     subtotal: input.subtotal,
     discount: input.discount ?? 0,
@@ -238,7 +242,7 @@ export function buildReceiptHtml(r: ReceiptData): string {
 <style>
   @page { margin: 12mm 10mm; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1c1917; padding: 8px 6px; }
+  body { font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif; color: #1c1917; padding: 8px 6px; }
   .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; background: #E7F0FF; border: 1px solid #A7C8F5; font-size: 10px; letter-spacing: 1px; color: #1D4ED8; font-weight: 800; }
   .center { text-align: center; }
   .head { text-align: center; margin-bottom: 4px; }
@@ -252,12 +256,12 @@ export function buildReceiptHtml(r: ReceiptData): string {
   .items { margin: 4px 0; }
   .item { margin-bottom: 8px; }
   .item-top { display: flex; gap: 8px; align-items: flex-start; }
-  .item-top .qty { width: 56px; font-family: 'Courier New', monospace; font-size: 11px; font-weight: 700; color: #78716c; }
+  .item-top .qty { width: 56px; font-family: 'Inter', system-ui, sans-serif; font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; font-size: 11px; font-weight: 700; color: #78716c; }
   .item-top .name { flex: 1; font-size: 12px; font-weight: 600; }
-  .item-top .line { font-family: 'Courier New', monospace; font-size: 12px; font-weight: 800; }
+  .item-top .line { font-family: 'Inter', system-ui, sans-serif; font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; font-size: 12px; font-weight: 800; }
   .item-sub { margin-left: 64px; font-size: 10px; color: #a8a29e; }
   .total-band { display: flex; justify-content: space-between; align-items: center; background: #1c1917; color: #fff; border-radius: 8px; padding: 8px 12px; margin-top: 4px; font-size: 13px; font-weight: 900; }
-  .total-band .amount { font-family: 'Courier New', monospace; }
+  .total-band .amount { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
   .foot { text-align: center; margin-top: 12px; }
   .foot .thanks { font-size: 13px; font-weight: 800; }
   .foot .small { font-size: 9px; color: #a8a29e; margin-top: 3px; }
@@ -271,7 +275,7 @@ export function buildReceiptHtml(r: ReceiptData): string {
   ${spacedRule}
   <div style="display:flex;justify-content:space-between;align-items:center">
     <span class="badge">${esc(copyLabel(r.copyType))}</span>
-    <span style="font-family:'Courier New',monospace;font-size:11px;font-weight:700;color:#78716c">N° ${esc(r.receiptNumber)}</span>
+    <span style="font-size:11px;font-weight:700;color:#78716c">N° ${esc(r.receiptNumber)}</span>
   </div>
   <div class="meta">
     ${row(isPayment ? "Dèt" : "Vant", esc(r.saleNumber), true)}

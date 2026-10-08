@@ -13,6 +13,8 @@ import { notifyLocal } from "../lib/notifications";
 import { salesEvents } from "../lib/salesEvents";
 import { useResponsive, contentW } from "../lib/responsive";
 import { Button, Card, Confirm, EmptyState, Field, ModalHeader, Overlay, SearchBar, Select, TextInput, toast } from "../components/ui";
+// STAGING-PICKUP: single gated import — delete this + the STAGING block below to remove.
+import { PickupToggleCard } from "../pickup-staging";
 import { Icon } from "../components/Icon";
 
 const ACTIVE_STORE_KEY = "active_store_id";
@@ -787,6 +789,9 @@ export function StoresPage() {
           <Button label={blocked ? "Aktive" : "Dezaktive"} variant={blocked ? "danger" : "primary"} onClick={toggleAppAccess} />
         </Card>
       )}
+
+      {/* STAGING-PICKUP: manager toggle (device-local). Delete block to remove. */}
+      <PickupToggleCard storeId={storeId} role={role} />
 
       {!isOwner && (
         <Card style={{ marginTop: 12, padding: 16 }}>
