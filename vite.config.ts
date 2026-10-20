@@ -230,7 +230,7 @@ export default defineConfig(({ mode }) => {
       // Force prebundling of these up front: they are discovered at runtime
       // through excluded packages (expo-font), and a raw source serve would
       // expose their deep CJS imports (`invariant/browser.js`) to ESM.
-      include: ["expo-modules-core", "fontfaceobserver"],
+      include: ["expo-modules-core", "fontfaceobserver", "zustand", "use-sync-external-store", "use-sync-external-store/shim/with-selector.js", "react-native-gifted-charts"],
       exclude: [
         "wa-sqlite",
         "@expo/vector-icons",
