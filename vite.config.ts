@@ -6,7 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const mobileSource = path.resolve(__dirname, "../mobile-app");
+const sharedSource = path.resolve(__dirname, "node_modules/@fley27/shared");
 const shim = (name: string) => path.resolve(__dirname, "src/shims", name);
 
 // Metro `require()` of static assets does not exist in Vite's ESM pipeline.
@@ -23,9 +23,9 @@ function rnAssetRequire(): Plugin {
     transform(code, id) {
       // Dev-mode ids carry ?v=hash queries — compare against the clean path.
       const file = id.split("?")[0];
-      const isMobileSource = file.startsWith(mobileSource);
+      const isSharedSource = file.startsWith(sharedSource);
       const isVectorIcons = file.includes("@expo/vector-icons");
-      if (!isMobileSource && !isVectorIcons) return null;
+      if (!isSharedSource && !isVectorIcons) return null;
       if (!code.includes("require(")) return null;
       ASSET_REQUIRE.lastIndex = 0;
       if (!ASSET_REQUIRE.test(code)) return null;
@@ -118,7 +118,13 @@ function giftedChartsFixes(): Plugin {
       const file = id.split("?")[0];
       if (file.endsWith(GRADIENT)) {
         return {
-          code: 'import LinearGradient from "react-native-linear-gradient";\nexport default LinearGradient;\n',
+          // Direct file import (not via resolve.alias) — deep node_modules
+          // requires inside commonjs proxies don't traverse the alias chain,
+          // so point straight at the web shim file.
+          code:
+            'import LinearGradient from "' +
+            shim("react-native-linear-gradient.tsx") +
+            '";\nexport default LinearGradient;\n',
           map: null,
         };
       }
@@ -156,7 +162,11 @@ export default defineConfig(({ mode }) => {
       rnAssetRequire(),
       vectorIconsJsx(),
       giftedChartsFixes(),
-      react(),
+      // The shared package ships raw TS/TSX inside node_modules; if the
+      // blanket node_modules exclusion stays, its JSX never reaches the
+      // React transform and the build fails to parse. Allowlist it via the
+      // negative lookahead (matches vectorIcons handling for other packages).
+      react({ exclude: [/node_modules\/(?!@fley27\/shared)/] }),
       VitePWA({
         registerType: "prompt",
         injectRegister: null,
@@ -208,7 +218,7 @@ export default defineConfig(({ mode }) => {
         { find: /^expo-sharing$/, replacement: shim("expo-sharing.ts") },
         { find: /^expo-contacts$/, replacement: shim("expo-contacts.ts") },
         { find: /^@expo-google-fonts\/inter$/, replacement: shim("expo-google-fonts-inter.ts") },
-        { find: "@app", replacement: mobileSource },
+        
       ],
       dedupe: ["react", "react-dom", "react-native-web"],
     },

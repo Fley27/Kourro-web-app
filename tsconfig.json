@@ -3,7 +3,11 @@
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
     "jsx": "react-jsx",
     "strict": true,
     "noEmit": true,
@@ -14,11 +18,19 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "useDefineForClassFields": true,
-    "types": ["vite/client", "vite-plugin-pwa/client"],
+    "types": [
+      "vite/client",
+      "vite-plugin-pwa/client"
+    ],
     "baseUrl": ".",
     "paths": {
-      "@app/*": ["../mobile-app/*"]
+      "@fley27/shared/*": ["node_modules/@fley27/shared/src/*", "node_modules/@fley27/shared/*"]
     }
   },
-  "include": ["src", "../mobile-app/App.tsx", "../mobile-app/src"]
+  "include": [
+    "src",
+    "node_modules/@fley27/shared/src",
+    "node_modules/@fley27/shared-types/src/index.ts",
+    "node_modules/@fley27/catalog-core/src/index.ts"
+  ]
 }

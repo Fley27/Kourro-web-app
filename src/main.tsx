@@ -5,7 +5,7 @@
 import "./shims/process-shim";
 import "./shims/install-globals";
 import { AppRegistry } from "react-native-web";
-import App from "@app/App";
+import App from "@fley27/shared/src/App";
 import { initPwa } from "./pwa/register";
 import { installStoragePersistence } from "./pwa/storage";
 import { mountPwaUpdatePrompt } from "./pwa/UpdatePrompt";
