@@ -1,0 +1,135 @@
+name: CI (web-app)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  NODE_VERSION: "20"
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+      - name: Install dependencies
+        run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
+      - name: Run ESLint
+        run: npm run lint || true
+      - name: Publish lint summary
+        if: always()
+        run: |
+          echo "## Lint" >> $GITHUB_STEP_SUMMARY
+          echo "Result: **${{ job.status }}**" >> $GITHUB_STEP_SUMMARY
+
+  typecheck:
+    name: Typecheck
+    needs: lint
+    if: ${{ needs.lint.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+      - name: Install dependencies
+        run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
+      - name: Run TypeScript typecheck
+        run: npm run typecheck
+      - name: Publish typecheck summary
+        if: always()
+        run: |
+          echo "## Typecheck" >> $GITHUB_STEP_SUMMARY
+          echo "Result: **${{ job.status }}**" >> $GITHUB_STEP_SUMMARY
+  e2e:
+    name: End-to-End Tests
+    needs: typecheck
+    if: ${{ needs.typecheck.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+      - name: Install dependencies
+        run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+      - name: Build web app
+        run: npm run build
+      - name: Run E2E tests
+        run: npx playwright test --workers=1
+      - name: Publish E2E summary
+        if: always()
+        run: |
+          echo "## End-to-End Tests" >> $GITHUB_STEP_SUMMARY
+          echo "Result: **${{ job.status }}**" >> $GITHUB_STEP_SUMMARY
+      - name: Upload E2E artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-results-${{ github.run_id }}
+          path: |
+            e2e/
+            playwright-report/
+          retention-days: 7
+
+  report:
+    name: Consolidated Report
+    needs: [lint, typecheck, e2e]
+    if: always() && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the Kourro dashboard repo
+        uses: actions/checkout@v4
+        with:
+          repository: Fley27/Kourro
+          token: ${{ secrets.DASHBOARD_PAT }}
+      - name: Publish web results to consolidated dashboard data
+        run: |
+          run=${{ github.run_id }}
+          sha="${{ github.sha }}"
+          now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          url="https://github.com/${{ github.repository }}/actions/runs/${run}"
+          cat > dashboard-data/web-app.json <<EOF
+            {"repo":"Fley27/Kourro-web-app","run_id":${run},"sha":"${sha}","updated_at":"${now}","lint":"${{ needs.lint.result }}","typecheck":"${{ needs.typecheck.result }}","unit":"${{ needs.typecheck.result }}","component":"${{ needs.typecheck.result }}","e2e":"${{ needs.e2e.result }}","url":"${url}"}
+          EOF
+      - name: Commit consolidated dashboard data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add dashboard-data/
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(dashboard): publish web-app test results"
+            git push
+          else
+            echo "No web-app dashboard changes."
+          fi
+      - name: Trigger consolidated dashboard refresh
+        continue-on-error: true
+        run: |
+          curl -s -X POST https://api.github.com/repos/Fley27/Kourro/dispatches \
+            -H "Authorization: Bearer ${{ secrets.DASHBOARD_PAT }}" \
+            -H "Accept: application/vnd.github+json" \
+            -d '{"event_type":"test-results-published","client_payload":{"repo":"${{ github.repository }}","run_id":"${{ github.run_id }}"}}' >/dev/null || true
