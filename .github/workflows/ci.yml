@@ -25,6 +25,8 @@ jobs:
         run: npm install --legacy-peer-deps
         env:
           NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
       - name: Run ESLint
         run: npm run lint || true
       - name: Publish lint summary
@@ -50,6 +52,8 @@ jobs:
         run: npm install --legacy-peer-deps
         env:
           NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
       - name: Run TypeScript typecheck
         run: npm run typecheck
       - name: Publish typecheck summary
@@ -72,6 +76,8 @@ jobs:
           cache: "npm"
       - name: Install dependencies
         run: npm install --legacy-peer-deps
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
       - name: Install Playwright browsers
