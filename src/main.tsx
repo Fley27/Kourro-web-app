@@ -1,22 +1,21 @@
-import React from "react";
-import ReactDOM from "react-dom/client";
-import { HashRouter } from "react-router-dom";
-import App from "./App";
-import { useAuthStore } from "./lib/authStore";
-import { LoadScreen } from "./components/LoadScreen";
-import "./styles.css";
+// Web build of the shared app: the React Native tree renders through
+// react-native-web. `shims/install-globals` must be imported before the app
+// so the web expo-sqlite implementation is in place when src/db/index.ts
+// evaluates its `require("expo-sqlite")` fallback chain.
+import "./shims/process-shim";
+import "./shims/install-globals";
+import { AppRegistry } from "react-native-web";
+import App from "@app/App";
+import { initPwa } from "./pwa/register";
+import { installStoragePersistence } from "./pwa/storage";
+import { mountPwaUpdatePrompt } from "./pwa/UpdatePrompt";
 
-useAuthStore.getState().restore();
+AppRegistry.registerComponent("Kourro", () => App);
+AppRegistry.runApplication("Kourro", {
+  rootTag: document.getElementById("root"),
+  initialProps: {},
+});
 
-function Boot() {
-  const status = useAuthStore(s => s.status);
-  return status === "loading" ? <LoadScreen /> : <App />;
-}
-
-ReactDOM.createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
-    <HashRouter>
-      <Boot />
-    </HashRouter>
-  </React.StrictMode>
-);
+installStoragePersistence();
+initPwa();
+mountPwaUpdatePrompt();
